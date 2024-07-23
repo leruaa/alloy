@@ -84,7 +84,7 @@ impl EthereumWallet {
     async fn sign_transaction_inner(
         &self,
         sender: Address,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature> {
         self.signer_by_address(sender)
             .ok_or_else(|| {

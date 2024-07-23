@@ -247,10 +247,7 @@ impl Transaction for TxEip4844Variant {
     }
 }
 
-impl<S> SignableTransaction<Signature<S>> for TxEip4844Variant
-where
-    S: Copy,
-{
+impl SignableTransaction for TxEip4844Variant {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         match self {
             Self::TxEip4844(ref mut inner) => {
@@ -277,7 +274,12 @@ where
         1 + length_of_length(payload_length) + payload_length
     }
 
-    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
+    fn into_signed<S>(self, signature: Signature<S>) -> Signed<Self, Signature<S>>
+    where
+        Self: Sized,
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -624,10 +626,7 @@ impl TxEip4844 {
     }
 }
 
-impl<S> SignableTransaction<Signature<S>> for TxEip4844
-where
-    S: Copy,
-{
+impl SignableTransaction for TxEip4844 {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.chain_id = chain_id;
     }
@@ -640,7 +639,12 @@ where
         self.payload_len_for_signature()
     }
 
-    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
+    fn into_signed<S>(self, signature: Signature<S>) -> Signed<Self, Signature<S>>
+    where
+        Self: Sized,
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -857,10 +861,7 @@ impl TxEip4844WithSidecar {
     }
 }
 
-impl<S> SignableTransaction<Signature<S>> for TxEip4844WithSidecar
-where
-    S: Copy,
-{
+impl SignableTransaction for TxEip4844WithSidecar {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.tx.chain_id = chain_id;
     }
@@ -880,7 +881,12 @@ where
         self.tx.payload_len_for_signature()
     }
 
-    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
+    fn into_signed<S>(self, signature: Signature<S>) -> Signed<Self, Signature<S>>
+    where
+        Self: Sized,
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.

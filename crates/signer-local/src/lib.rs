@@ -187,7 +187,7 @@ where
     #[doc(alias = "sign_tx")]
     async fn sign_transaction(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_hash_sync(&tx.signature_hash()))
     }
@@ -204,7 +204,7 @@ where
     #[doc(alias = "sign_tx_sync")]
     fn sign_transaction_sync(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_hash_sync(&tx.signature_hash()))
     }
@@ -230,7 +230,7 @@ mod test {
         }
 
         async fn sign_dyn_tx_test(
-            tx: &mut dyn SignableTransaction<Signature>,
+            tx: &mut dyn SignableTransaction,
             chain_id: Option<ChainId>,
         ) -> Result<Signature> {
             let mut signer: PrivateKeySigner =

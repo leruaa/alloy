@@ -73,10 +73,7 @@ impl alloy_network::TxSigner<Signature> for TrezorSigner {
 
     #[inline]
     #[doc(alias = "sign_tx")]
-    async fn sign_transaction(
-        &self,
-        tx: &mut dyn SignableTransaction<Signature>,
-    ) -> Result<Signature> {
+    async fn sign_transaction(&self, tx: &mut dyn SignableTransaction) -> Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_tx_inner(tx).await)
     }
 }
@@ -160,10 +157,7 @@ impl TrezorSigner {
     ///
     /// Does not apply EIP-155.
     #[doc(alias = "sign_transaction_inner")]
-    async fn sign_tx_inner(
-        &self,
-        tx: &dyn SignableTransaction<Signature>,
-    ) -> Result<Signature, TrezorError> {
+    async fn sign_tx_inner(&self, tx: &dyn SignableTransaction) -> Result<Signature, TrezorError> {
         let mut client = self.get_client()?;
         let path = Self::convert_path(&self.derivation);
 

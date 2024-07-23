@@ -39,10 +39,7 @@ impl alloy_network::TxSigner<Signature> for LedgerSigner {
 
     #[inline]
     #[doc(alias = "sign_tx")]
-    async fn sign_transaction(
-        &self,
-        tx: &mut dyn SignableTransaction<Signature>,
-    ) -> Result<Signature> {
+    async fn sign_transaction(&self, tx: &mut dyn SignableTransaction) -> Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_tx_rlp(&tx.encoded_for_signing()).await)
     }
 }
@@ -300,7 +297,6 @@ impl LedgerSigner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_consensus::{TxEip1559, TxEip2930};
     use alloy_network::TxSigner;
     use alloy_primitives::{address, bytes, U256};
     use alloy_rlp::Decodable;
@@ -379,10 +375,7 @@ mod tests {
         let tx_rlp = hex!("01f8a30380018402625a0094cccccccccccccccccccccccccccccccccccccccc830186a0a4693c61390000000000000000000000000000000000000000000000000000000000000002f85bf859940000000000000000000000000000000000000102f842a00000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000060a7");
         let mut untyped_rlp = &tx_rlp[1..];
         let mut tx = alloy_consensus::TxEip2930::decode(&mut untyped_rlp).unwrap();
-        assert_eq!(
-            hex::encode(<TxEip2930 as SignableTransaction<Signature>>::encoded_for_signing(&tx)),
-            hex::encode(tx_rlp)
-        );
+        assert_eq!(hex::encode(tx.encoded_for_signing()), hex::encode(tx_rlp));
         test_sign_tx_generic(&mut tx).await;
     }
 
@@ -394,14 +387,11 @@ mod tests {
         let tx_rlp = hex!("02ef0306843b9aca008504a817c80082520894b2bb2b958afa2e96dab3f3ce7162b87daea39017872386f26fc1000080c0");
         let mut untyped_rlp = &tx_rlp[1..];
         let mut tx = alloy_consensus::TxEip1559::decode(&mut untyped_rlp).unwrap();
-        assert_eq!(
-            hex::encode(<TxEip1559 as SignableTransaction<Signature>>::encoded_for_signing(&tx)),
-            hex::encode(tx_rlp)
-        );
+        assert_eq!(hex::encode(tx.encoded_for_signing()), hex::encode(tx_rlp));
         test_sign_tx_generic(&mut tx).await;
     }
 
-    async fn test_sign_tx_generic(tx: &mut dyn SignableTransaction<Signature>) {
+    async fn test_sign_tx_generic(tx: &mut dyn SignableTransaction) {
         let sighash = tx.signature_hash();
         let ledger = init_ledger().await;
         let sig = match ledger.sign_transaction(tx).await {

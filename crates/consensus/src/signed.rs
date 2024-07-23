@@ -53,7 +53,7 @@ where
     }
 }
 
-impl<T: SignableTransaction<Sig>, Sig> Signed<T, Sig> {
+impl<T: SignableTransaction, Sig> Signed<T, Sig> {
     /// Instantiate from a transaction and signature. Does not verify the signature.
     pub const fn new_unchecked(tx: T, signature: Sig, hash: B256) -> Self {
         Self { tx, signature, hash }

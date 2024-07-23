@@ -158,6 +158,7 @@ impl TxLegacy {
     #[doc(hidden)]
     pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, Signature<S>>>
     where
+        S: Copy,
         Signature<S>: BuildableSignature,
     {
         let header = Header::decode(buf)?;
@@ -231,7 +232,7 @@ impl Transaction for TxLegacy {
     }
 }
 
-impl<S> SignableTransaction<Signature<S>> for TxLegacy {
+impl SignableTransaction for TxLegacy {
     fn use_eip155(&self) -> bool {
         self.chain_id.is_some()
     }
@@ -253,7 +254,11 @@ impl<S> SignableTransaction<Signature<S>> for TxLegacy {
         Header { list: true, payload_length }.length() + payload_length
     }
 
-    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
+    fn into_signed<S>(self, signature: Signature<S>) -> Signed<Self, Signature<S>>
+    where
+        Self: Sized,
+        Signature<S>: BuildableSignature,
+    {
         let mut buf = Vec::with_capacity(self.encoded_len_with_signature(&signature));
         self.encode_with_signature_fields(&signature, &mut buf);
         let hash = keccak256(&buf);
@@ -263,9 +268,7 @@ impl<S> SignableTransaction<Signature<S>> for TxLegacy {
 
 impl Encodable for TxLegacy {
     fn encode(&self, out: &mut dyn BufMut) {
-        <Self as SignableTransaction<alloy_primitives::Signature<()>>>::encode_for_signing(
-            self, out,
-        )
+        self.encode_for_signing(out)
     }
 
     fn length(&self) -> usize {

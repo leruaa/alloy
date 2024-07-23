@@ -309,10 +309,7 @@ impl Transaction for TxEip7702 {
     }
 }
 
-impl<S> SignableTransaction<Signature<S>> for TxEip7702
-where
-    S: Copy,
-{
+impl SignableTransaction for TxEip7702 {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.chain_id = chain_id;
     }
@@ -326,7 +323,12 @@ where
         self.length() + 1
     }
 
-    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
+    fn into_signed<S>(self, signature: Signature<S>) -> Signed<Self, Signature<S>>
+    where
+        Self: Sized,
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-7702 transaction. V should indicate the y-parity of the
         // signature.
