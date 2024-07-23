@@ -66,9 +66,7 @@ impl<T: SignableTransaction, Sig> Signed<T, Sig> {
 }
 
 #[cfg(feature = "k256")]
-impl<T: SignableTransaction<alloy_primitives::MemoizedSignature>>
-    Signed<T, alloy_primitives::MemoizedSignature>
-{
+impl<T: SignableTransaction> Signed<T, alloy_primitives::MemoizedSignature> {
     /// Recover the signer of the transaction
     pub fn recover_signer(
         &self,

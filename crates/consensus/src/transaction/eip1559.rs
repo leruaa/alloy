@@ -389,7 +389,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            <TxEip1559 as SignableTransaction<MemoizedSignature>>::signature_hash(&tx),
+            tx.signature_hash(),
             hex!("0d5688ac3897124635b6cf1bc0e29d6dfebceebdc10a54d74f2ef8b56535b682")
         );
 
