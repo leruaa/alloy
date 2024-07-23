@@ -1,6 +1,6 @@
 use crate::{SignableTransaction, Signed, Transaction, TxType};
 use alloy_eips::eip2930::AccessList;
-use alloy_primitives::{keccak256, Bytes, ChainId, Signature, TxKind, U256};
+use alloy_primitives::{keccak256, BuildableSignature, Bytes, ChainId, Signature, TxKind, U256};
 use alloy_rlp::{length_of_length, BufMut, Decodable, Encodable, Header};
 use core::mem;
 
@@ -131,7 +131,11 @@ impl TxEip2930 {
     ///
     /// If `with_header` is `true`, the payload length will include the RLP header length.
     /// If `with_header` is `false`, the payload length will not include the RLP header length.
-    pub fn encoded_len_with_signature(&self, signature: &Signature, with_header: bool) -> usize {
+    pub fn encoded_len_with_signature<S>(
+        &self,
+        signature: &Signature<S>,
+        with_header: bool,
+    ) -> usize {
         // this counts the tx fields and signature fields
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
 
@@ -154,9 +158,9 @@ impl TxEip2930 {
     /// Inner encoding function that is used for both rlp [`Encodable`] trait and for calculating
     /// hash that for eip2718 does not require a rlp header
     #[doc(hidden)]
-    pub fn encode_with_signature(
+    pub fn encode_with_signature<S>(
         &self,
-        signature: &Signature,
+        signature: &Signature<S>,
         out: &mut dyn BufMut,
         with_header: bool,
     ) {
@@ -176,7 +180,11 @@ impl TxEip2930 {
     /// tx type byte or string header.
     ///
     /// This __does__ encode a list header and include a signature.
-    pub(crate) fn encode_with_signature_fields(&self, signature: &Signature, out: &mut dyn BufMut) {
+    pub(crate) fn encode_with_signature_fields<S>(
+        &self,
+        signature: &Signature<S>,
+        out: &mut dyn BufMut,
+    ) {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         let header = Header { list: true, payload_length };
         header.encode(out);
@@ -191,7 +199,11 @@ impl TxEip2930 {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, Signature<S>>>
+    where
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -201,7 +213,7 @@ impl TxEip2930 {
         let original_len = buf.len();
 
         let tx = Self::decode_fields(buf)?;
-        let signature = Signature::decode_rlp_vrs(buf)?;
+        let signature = Signature::<S>::decode_rlp_vrs(buf)?;
 
         let signed = tx.into_signed(signature);
         if buf.len() + header.payload_length != original_len {
@@ -251,7 +263,10 @@ impl Transaction for TxEip2930 {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip2930 {
+impl<S> SignableTransaction<Signature<S>> for TxEip2930
+where
+    S: Copy,
+{
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.chain_id = chain_id;
     }
@@ -268,7 +283,7 @@ impl SignableTransaction<Signature> for TxEip2930 {
         1 + Header { list: true, payload_length }.length() + payload_length
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-2930 transaction. V should indicate the y-parity of the
         // signature.
@@ -311,7 +326,7 @@ impl Decodable for TxEip2930 {
 mod tests {
     use super::TxEip2930;
     use crate::{SignableTransaction, TxEnvelope};
-    use alloy_primitives::{Address, Signature, TxKind, U256};
+    use alloy_primitives::{Address, RawSignature, TxKind, U256};
     use alloy_rlp::{Decodable, Encodable};
 
     #[test]
@@ -327,7 +342,7 @@ mod tests {
             input: vec![1, 2].into(),
             access_list: Default::default(),
         };
-        let signature = Signature::test_signature();
+        let signature = RawSignature::test_signature();
 
         let mut encoded = Vec::new();
         tx.encode_with_signature_fields(&signature, &mut encoded);
@@ -349,7 +364,7 @@ mod tests {
             access_list: Default::default(),
         };
 
-        let signature = Signature::test_signature();
+        let signature = RawSignature::test_signature();
 
         let tx = request.into_signed(signature);
 

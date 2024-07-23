@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::{Signed, Transaction, TxEip1559, TxEip2930, TxLegacy};
 use alloy_eips::eip2718::{Decodable2718, Eip2718Error, Eip2718Result, Encodable2718};
-use alloy_primitives::{TxKind, B256};
+use alloy_primitives::{BuildableSignature, RawSignature, Signature, TxKind, B256};
 use alloy_rlp::{Decodable, Encodable, Header};
 
 use crate::transaction::eip4844::{TxEip4844, TxEip4844Variant, TxEip4844WithSidecar};
@@ -82,16 +82,16 @@ impl TryFrom<u8> for TxType {
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 #[doc(alias = "TransactionEnvelope")]
 #[non_exhaustive]
-pub enum TxEnvelope {
+pub enum TxEnvelope<Sig = RawSignature> {
     /// An untagged [`TxLegacy`].
     #[cfg_attr(feature = "serde", serde(rename = "0x0", alias = "0x00"))]
-    Legacy(Signed<TxLegacy>),
+    Legacy(Signed<TxLegacy, Sig>),
     /// A [`TxEip2930`] tagged with type 1.
     #[cfg_attr(feature = "serde", serde(rename = "0x1", alias = "0x01"))]
-    Eip2930(Signed<TxEip2930>),
+    Eip2930(Signed<TxEip2930, Sig>),
     /// A [`TxEip1559`] tagged with type 2.
     #[cfg_attr(feature = "serde", serde(rename = "0x2", alias = "0x02"))]
-    Eip1559(Signed<TxEip1559>),
+    Eip1559(Signed<TxEip1559, Sig>),
     /// A TxEip4844 tagged with type 3.
     /// An EIP-4844 transaction has two network representations:
     /// 1 - The transaction itself, which is a regular RLP-encoded transaction and used to retrieve
@@ -100,48 +100,57 @@ pub enum TxEnvelope {
     /// 2 - The transaction with a sidecar, which is the form used to
     /// send transactions to the network.
     #[cfg_attr(feature = "serde", serde(rename = "0x3", alias = "0x03"))]
-    Eip4844(Signed<TxEip4844Variant>),
+    Eip4844(Signed<TxEip4844Variant, Sig>),
 }
 
-impl From<Signed<TxLegacy>> for TxEnvelope {
-    fn from(v: Signed<TxLegacy>) -> Self {
+impl<Sig> From<Signed<TxLegacy, Sig>> for TxEnvelope<Sig> {
+    fn from(v: Signed<TxLegacy, Sig>) -> Self {
         Self::Legacy(v)
     }
 }
 
-impl From<Signed<TxEip2930>> for TxEnvelope {
-    fn from(v: Signed<TxEip2930>) -> Self {
+impl<Sig> From<Signed<TxEip2930, Sig>> for TxEnvelope<Sig> {
+    fn from(v: Signed<TxEip2930, Sig>) -> Self {
         Self::Eip2930(v)
     }
 }
 
-impl From<Signed<TxEip1559>> for TxEnvelope {
-    fn from(v: Signed<TxEip1559>) -> Self {
+impl<Sig> From<Signed<TxEip1559, Sig>> for TxEnvelope<Sig> {
+    fn from(v: Signed<TxEip1559, Sig>) -> Self {
         Self::Eip1559(v)
     }
 }
 
-impl From<Signed<TxEip4844Variant>> for TxEnvelope {
-    fn from(v: Signed<TxEip4844Variant>) -> Self {
+impl<Sig> From<Signed<TxEip4844Variant, Sig>> for TxEnvelope<Sig> {
+    fn from(v: Signed<TxEip4844Variant, Sig>) -> Self {
         Self::Eip4844(v)
     }
 }
 
-impl From<Signed<TxEip4844>> for TxEnvelope {
-    fn from(v: Signed<TxEip4844>) -> Self {
+impl<S> From<Signed<TxEip4844, Signature<S>>> for TxEnvelope<Signature<S>>
+where
+    S: Copy,
+{
+    fn from(v: Signed<TxEip4844, Signature<S>>) -> Self {
         let (tx, signature, hash) = v.into_parts();
         Self::Eip4844(Signed::new_unchecked(tx.into(), signature, hash))
     }
 }
 
-impl From<Signed<TxEip4844WithSidecar>> for TxEnvelope {
-    fn from(v: Signed<TxEip4844WithSidecar>) -> Self {
+impl<S> From<Signed<TxEip4844WithSidecar, Signature<S>>> for TxEnvelope<Signature<S>>
+where
+    S: Copy,
+{
+    fn from(v: Signed<TxEip4844WithSidecar, Signature<S>>) -> Self {
         let (tx, signature, hash) = v.into_parts();
         Self::Eip4844(Signed::new_unchecked(tx.into(), signature, hash))
     }
 }
 
-impl TxEnvelope {
+impl<S> TxEnvelope<Signature<S>>
+where
+    S: Copy,
+{
     /// Returns true if the transaction is a legacy transaction.
     #[inline]
     pub const fn is_legacy(&self) -> bool {
@@ -167,7 +176,7 @@ impl TxEnvelope {
     }
 
     /// Returns the [`TxLegacy`] variant if the transaction is a legacy transaction.
-    pub const fn as_legacy(&self) -> Option<&Signed<TxLegacy>> {
+    pub const fn as_legacy(&self) -> Option<&Signed<TxLegacy, Signature<S>>> {
         match self {
             Self::Legacy(tx) => Some(tx),
             _ => None,
@@ -175,7 +184,7 @@ impl TxEnvelope {
     }
 
     /// Returns the [`TxEip2930`] variant if the transaction is an EIP-2930 transaction.
-    pub const fn as_eip2930(&self) -> Option<&Signed<TxEip2930>> {
+    pub const fn as_eip2930(&self) -> Option<&Signed<TxEip2930, Signature<S>>> {
         match self {
             Self::Eip2930(tx) => Some(tx),
             _ => None,
@@ -183,7 +192,7 @@ impl TxEnvelope {
     }
 
     /// Returns the [`TxEip1559`] variant if the transaction is an EIP-1559 transaction.
-    pub const fn as_eip1559(&self) -> Option<&Signed<TxEip1559>> {
+    pub const fn as_eip1559(&self) -> Option<&Signed<TxEip1559, Signature<S>>> {
         match self {
             Self::Eip1559(tx) => Some(tx),
             _ => None,
@@ -191,23 +200,10 @@ impl TxEnvelope {
     }
 
     /// Returns the [`TxEip4844`] variant if the transaction is an EIP-4844 transaction.
-    pub const fn as_eip4844(&self) -> Option<&Signed<TxEip4844Variant>> {
+    pub const fn as_eip4844(&self) -> Option<&Signed<TxEip4844Variant, Signature<S>>> {
         match self {
             Self::Eip4844(tx) => Some(tx),
             _ => None,
-        }
-    }
-
-    /// Recover the signer of the transaction.
-    #[cfg(feature = "k256")]
-    pub fn recover_signer(
-        &self,
-    ) -> Result<alloy_primitives::Address, alloy_primitives::SignatureError> {
-        match self {
-            Self::Legacy(tx) => tx.recover_signer(),
-            Self::Eip2930(tx) => tx.recover_signer(),
-            Self::Eip1559(tx) => tx.recover_signer(),
-            Self::Eip4844(tx) => tx.recover_signer(),
         }
     }
 
@@ -287,7 +283,25 @@ impl TxEnvelope {
     }
 }
 
-impl Encodable for TxEnvelope {
+#[cfg(feature = "k256")]
+impl TxEnvelope<alloy_primitives::MemoizedSignature> {
+    /// Recover the signer of the transaction.
+    pub fn recover_signer(
+        &self,
+    ) -> Result<alloy_primitives::Address, alloy_primitives::SignatureError> {
+        match self {
+            Self::Legacy(tx) => tx.recover_signer(),
+            Self::Eip2930(tx) => tx.recover_signer(),
+            Self::Eip1559(tx) => tx.recover_signer(),
+            Self::Eip4844(tx) => tx.recover_signer(),
+        }
+    }
+}
+
+impl<S> Encodable for TxEnvelope<Signature<S>>
+where
+    S: Copy + Send + Sync + 'static,
+{
     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
         self.network_encode(out)
     }
@@ -302,7 +316,11 @@ impl Encodable for TxEnvelope {
     }
 }
 
-impl Decodable for TxEnvelope {
+impl<S> Decodable for TxEnvelope<Signature<S>>
+where
+    S: Copy,
+    Signature<S>: BuildableSignature,
+{
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
         match Self::network_decode(buf) {
             Ok(t) => Ok(t),
@@ -315,7 +333,11 @@ impl Decodable for TxEnvelope {
     }
 }
 
-impl Decodable2718 for TxEnvelope {
+impl<S> Decodable2718 for TxEnvelope<Signature<S>>
+where
+    S: Copy,
+    Signature<S>: BuildableSignature,
+{
     fn typed_decode(ty: u8, buf: &mut &[u8]) -> Eip2718Result<Self> {
         match ty.try_into().map_err(|_| alloy_rlp::Error::Custom("unexpected tx type"))? {
             TxType::Eip2930 => Ok(TxEip2930::decode_signed_fields(buf)?.into()),
@@ -330,7 +352,10 @@ impl Decodable2718 for TxEnvelope {
     }
 }
 
-impl Encodable2718 for TxEnvelope {
+impl<S> Encodable2718 for TxEnvelope<Signature<S>>
+where
+    S: Copy + Send + Sync + 'static,
+{
     fn type_flag(&self) -> Option<u8> {
         match self {
             Self::Legacy(_) => None,
@@ -361,7 +386,10 @@ impl Encodable2718 for TxEnvelope {
     }
 }
 
-impl Transaction for TxEnvelope {
+impl<Sig> Transaction for TxEnvelope<Sig>
+where
+    Sig: Send + Sync + 'static,
+{
     fn chain_id(&self) -> Option<alloy_primitives::ChainId> {
         match self {
             Self::Legacy(tx) => tx.tx().chain_id(),
@@ -434,7 +462,7 @@ mod tests {
         eip2930::{AccessList, AccessListItem},
         eip4844::BlobTransactionSidecar,
     };
-    use alloy_primitives::{hex, Address, Parity, Signature, U256};
+    use alloy_primitives::{hex, Address, Parity, RawSignature, U256};
     #[allow(unused_imports)]
     use alloy_primitives::{Bytes, TxKind};
     use std::{fs, path::PathBuf, vec};
@@ -528,13 +556,13 @@ mod tests {
         assert_eq!(from, address!("A83C816D4f9b2783761a22BA6FADB0eB0606D7B2"));
     }
 
-    fn test_encode_decode_roundtrip<T: SignableTransaction<Signature>>(
+    fn test_encode_decode_roundtrip<T: SignableTransaction<RawSignature>>(
         tx: T,
-        signature: Option<Signature>,
+        signature: Option<RawSignature>,
     ) where
         Signed<T>: Into<TxEnvelope>,
     {
-        let signature = signature.unwrap_or_else(Signature::test_signature);
+        let signature = signature.unwrap_or_else(RawSignature::test_signature);
         let tx_signed = tx.into_signed(signature);
         let tx_envelope: TxEnvelope = tx_signed.into();
         let encoded = tx_envelope.encoded_2718();
@@ -572,7 +600,7 @@ mod tests {
             input: vec![8].into(),
             access_list: Default::default(),
         };
-        let signature = Signature::test_signature().with_parity(Parity::Eip155(42));
+        let signature = RawSignature::test_signature().with_parity(Parity::Eip155(42));
         test_encode_decode_roundtrip(tx, Some(signature));
     }
 
@@ -588,7 +616,7 @@ mod tests {
             input: vec![7].into(),
             access_list: Default::default(),
         };
-        let signature = Signature::test_signature().with_parity(Parity::Eip155(42));
+        let signature = RawSignature::test_signature().with_parity(Parity::Eip155(42));
         test_encode_decode_roundtrip(tx, Some(signature));
     }
 
@@ -610,7 +638,7 @@ mod tests {
             blob_versioned_hashes: vec![B256::random()],
             max_fee_per_blob_gas: 0,
         };
-        let signature = Signature::test_signature().with_parity(Parity::Eip155(42));
+        let signature = RawSignature::test_signature().with_parity(Parity::Eip155(42));
         test_encode_decode_roundtrip(tx, Some(signature));
     }
 
@@ -638,7 +666,7 @@ mod tests {
             proofs: vec![[4; 48].into()],
         };
         let tx = TxEip4844WithSidecar { tx, sidecar };
-        let signature = Signature::test_signature().with_parity(Parity::Eip155(42));
+        let signature = RawSignature::test_signature().with_parity(Parity::Eip155(42));
         test_encode_decode_roundtrip(tx, Some(signature));
     }
 
@@ -661,7 +689,7 @@ mod tests {
             max_fee_per_blob_gas: 0,
         };
         let tx = TxEip4844Variant::TxEip4844(tx);
-        let signature = Signature::test_signature().with_parity(Parity::Eip155(42));
+        let signature = RawSignature::test_signature().with_parity(Parity::Eip155(42));
         test_encode_decode_roundtrip(tx, Some(signature));
     }
 
@@ -685,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_transaction_list() {
-        let signature = Signature::test_signature();
+        let signature = RawSignature::test_signature();
         let tx = TxEnvelope::Eip1559(
             TxEip1559 {
                 chain_id: 1u64,
@@ -721,11 +749,11 @@ mod tests {
     }
 
     #[cfg(feature = "serde")]
-    fn test_serde_roundtrip<T: SignableTransaction<Signature>>(tx: T)
+    fn test_serde_roundtrip<T: SignableTransaction<RawSignature>>(tx: T)
     where
         Signed<T>: Into<TxEnvelope>,
     {
-        let signature = Signature::test_signature();
+        let signature = RawSignature::test_signature();
         let tx_envelope: TxEnvelope = tx.into_signed(signature).into();
 
         let serialized = serde_json::to_string(&tx_envelope).unwrap();

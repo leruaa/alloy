@@ -2,7 +2,7 @@
 
 use crate::types::{DerivationType, LedgerError, INS, P1, P1_FIRST, P2};
 use alloy_consensus::SignableTransaction;
-use alloy_primitives::{hex, Address, ChainId, B256};
+use alloy_primitives::{hex, Address, BuildableSignature, ChainId, B256};
 use alloy_signer::{sign_transaction_with_chain_id, Result, Signature, Signer};
 use async_trait::async_trait;
 use coins_ledger::{
@@ -300,6 +300,7 @@ impl LedgerSigner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_consensus::{TxEip1559, TxEip2930};
     use alloy_network::TxSigner;
     use alloy_primitives::{address, bytes, U256};
     use alloy_rlp::Decodable;
@@ -378,7 +379,10 @@ mod tests {
         let tx_rlp = hex!("01f8a30380018402625a0094cccccccccccccccccccccccccccccccccccccccc830186a0a4693c61390000000000000000000000000000000000000000000000000000000000000002f85bf859940000000000000000000000000000000000000102f842a00000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000060a7");
         let mut untyped_rlp = &tx_rlp[1..];
         let mut tx = alloy_consensus::TxEip2930::decode(&mut untyped_rlp).unwrap();
-        assert_eq!(hex::encode(tx.encoded_for_signing()), hex::encode(tx_rlp));
+        assert_eq!(
+            hex::encode(<TxEip2930 as SignableTransaction<Signature>>::encoded_for_signing(&tx)),
+            hex::encode(tx_rlp)
+        );
         test_sign_tx_generic(&mut tx).await;
     }
 
@@ -390,7 +394,10 @@ mod tests {
         let tx_rlp = hex!("02ef0306843b9aca008504a817c80082520894b2bb2b958afa2e96dab3f3ce7162b87daea39017872386f26fc1000080c0");
         let mut untyped_rlp = &tx_rlp[1..];
         let mut tx = alloy_consensus::TxEip1559::decode(&mut untyped_rlp).unwrap();
-        assert_eq!(hex::encode(tx.encoded_for_signing()), hex::encode(tx_rlp));
+        assert_eq!(
+            hex::encode(<TxEip1559 as SignableTransaction<Signature>>::encoded_for_signing(&tx)),
+            hex::encode(tx_rlp)
+        );
         test_sign_tx_generic(&mut tx).await;
     }
 

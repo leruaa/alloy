@@ -1,7 +1,9 @@
 use crate::{SignableTransaction, Signed, Transaction, TxType};
 
 use alloy_eips::{eip2930::AccessList, eip4844::DATA_GAS_PER_BLOB};
-use alloy_primitives::{keccak256, Address, Bytes, ChainId, Signature, TxKind, B256, U256};
+use alloy_primitives::{
+    keccak256, Address, BuildableSignature, Bytes, ChainId, Signature, TxKind, B256, U256,
+};
 use alloy_rlp::{length_of_length, BufMut, Decodable, Encodable, Header};
 use core::mem;
 
@@ -122,9 +124,9 @@ impl TxEip4844Variant {
     /// If `with_header` is `true`, the following will be encoded:
     /// `rlp(tx_type (0x03) || rlp([transaction_payload_body, blobs, commitments, proofs]))`
     #[doc(hidden)]
-    pub fn encode_with_signature(
+    pub fn encode_with_signature<S>(
         &self,
-        signature: &Signature,
+        signature: &Signature<S>,
         out: &mut dyn BufMut,
         with_header: bool,
     ) {
@@ -165,7 +167,11 @@ impl TxEip4844Variant {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, Signature<S>>>
+    where
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         let mut current_buf = *buf;
         let _header = Header::decode(&mut current_buf)?;
 
@@ -241,7 +247,10 @@ impl Transaction for TxEip4844Variant {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip4844Variant {
+impl<S> SignableTransaction<Signature<S>> for TxEip4844Variant
+where
+    S: Copy,
+{
     fn set_chain_id(&mut self, chain_id: ChainId) {
         match self {
             Self::TxEip4844(ref mut inner) => {
@@ -268,7 +277,7 @@ impl SignableTransaction<Signature> for TxEip4844Variant {
         1 + length_of_length(payload_length) + payload_length
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -493,7 +502,11 @@ impl TxEip4844 {
     ///
     /// If `with_header` is `true`, the payload length will include the RLP header length.
     /// If `with_header` is `false`, the payload length will not include the RLP header length.
-    pub fn encoded_len_with_signature(&self, signature: &Signature, with_header: bool) -> usize {
+    pub fn encoded_len_with_signature<S>(
+        &self,
+        signature: &Signature<S>,
+        with_header: bool,
+    ) -> usize {
         // this counts the tx fields and signature fields
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
 
@@ -516,9 +529,9 @@ impl TxEip4844 {
     /// Inner encoding function that is used for both rlp [`Encodable`] trait and for calculating
     /// hash that for eip2718 does not require a rlp header
     #[doc(hidden)]
-    pub fn encode_with_signature(
+    pub fn encode_with_signature<S>(
         &self,
-        signature: &Signature,
+        signature: &Signature<S>,
         out: &mut dyn BufMut,
         with_header: bool,
     ) {
@@ -538,7 +551,11 @@ impl TxEip4844 {
     /// tx type byte or string header.
     ///
     /// This __does__ encode a list header and include a signature.
-    pub(crate) fn encode_with_signature_fields(&self, signature: &Signature, out: &mut dyn BufMut) {
+    pub(crate) fn encode_with_signature_fields<S>(
+        &self,
+        signature: &Signature<S>,
+        out: &mut dyn BufMut,
+    ) {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         let header = Header { list: true, payload_length };
         header.encode(out);
@@ -553,7 +570,11 @@ impl TxEip4844 {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, Signature<S>>>
+    where
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -603,7 +624,10 @@ impl TxEip4844 {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip4844 {
+impl<S> SignableTransaction<Signature<S>> for TxEip4844
+where
+    S: Copy,
+{
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.chain_id = chain_id;
     }
@@ -616,7 +640,7 @@ impl SignableTransaction<Signature> for TxEip4844 {
         self.payload_len_for_signature()
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -772,7 +796,7 @@ impl TxEip4844WithSidecar {
     ///
     /// where `tx_payload` is the RLP encoding of the [TxEip4844] transaction fields:
     /// `rlp([chain_id, nonce, max_priority_fee_per_gas, ..., v, r, s])`
-    pub fn encode_with_signature_fields(&self, signature: &Signature, out: &mut dyn BufMut) {
+    pub fn encode_with_signature_fields<S>(&self, signature: &Signature<S>, out: &mut dyn BufMut) {
         let inner_payload_length = self.tx.fields_len() + signature.rlp_vrs_len();
         let inner_header = Header { list: true, payload_length: inner_payload_length };
 
@@ -799,7 +823,11 @@ impl TxEip4844WithSidecar {
     ///
     /// This is the inverse of [TxEip4844WithSidecar::encode_with_signature_fields].
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, Signature<S>>>
+    where
+        S: Copy,
+        Signature<S>: BuildableSignature,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -829,7 +857,10 @@ impl TxEip4844WithSidecar {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip4844WithSidecar {
+impl<S> SignableTransaction<Signature<S>> for TxEip4844WithSidecar
+where
+    S: Copy,
+{
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.tx.chain_id = chain_id;
     }
@@ -849,7 +880,7 @@ impl SignableTransaction<Signature> for TxEip4844WithSidecar {
         self.tx.payload_len_for_signature()
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self, Signature> {
+    fn into_signed(self, signature: Signature<S>) -> Signed<Self, Signature<S>> {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -903,7 +934,7 @@ mod tests {
     use super::{BlobTransactionSidecar, TxEip4844, TxEip4844WithSidecar};
     use crate::{transaction::eip4844::TxEip4844Variant, SignableTransaction, TxEnvelope};
     use alloy_eips::eip2930::AccessList;
-    use alloy_primitives::{address, b256, bytes, Signature, U256};
+    use alloy_primitives::{address, b256, bytes, BuildableSignature, RawSignature, U256};
     use alloy_rlp::{Decodable, Encodable};
 
     #[test]
@@ -929,7 +960,7 @@ mod tests {
             proofs: vec![[4; 48].into()],
         };
         let mut tx = TxEip4844WithSidecar { tx, sidecar };
-        let signature = Signature::test_signature();
+        let signature = RawSignature::test_signature();
 
         // turn this transaction into_signed
         let expected_signed = tx.clone().into_signed(signature);
@@ -986,7 +1017,7 @@ mod tests {
                 input: bytes!("701f58c50000000000000000000000000000000000000000000000000000000000073fb1ed12e288def5b439ea074b398dbb4c967f2852baac3238c5fe4b62b871a59a6d00000000000000000000000000000000000000000000000000000000123971da000000000000000000000000000000000000000000000000000000000000000ac39b2a24e1dbdd11a1e7bd7c0f4dfd7d9b9cfa0997d033ad05f961ba3b82c6c83312c967f10daf5ed2bffe309249416e03ee0b101f2b84d2102b9e38b0e4dfdf0000000000000000000000000000000000000000000000000000000066254c8b538dcc33ecf5334bbd294469f9d4fd084a3090693599a46d6c62567747cbc8660000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000073fb20000000000000000000000000000000000000000000000000000000066254da10000000000000000000000000000000000000000000000000000000012397d5e20b09b263779fda4171c341e720af8fa469621ff548651f8dbbc06c2d320400c000000000000000000000000000000000000000000000000000000000000000b50a833bb11af92814e99c6ff7cf7ba7042827549d6f306a04270753702d897d8fc3c411b99159939ac1c16d21d3057ddc8b2333d1331ab34c938cff0eb29ce2e43241c170344db6819f76b1f1e0ab8206f3ec34120312d275c4f5bbea7f5c55700000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000480000000000000000000000000000000000000000000000000000000000000031800000000000000000000000000000000000000000000800b0000000000000000000000000000000000000000000000000000000000000004ed12e288def5b439ea074b398dbb4c967f2852baac3238c5fe4b62b871a59a6d00000ca8000000000000000000000000000000000000800b000000000000000000000000000000000000000000000000000000000000000300000000000000000000000066254da100000000000000000000000066254e9d00010ca80000000000000000000000000000000000008001000000000000000000000000000000000000000000000000000000000000000550a833bb11af92814e99c6ff7cf7ba7042827549d6f306a04270753702d897d800010ca800000000000000000000000000000000000080010000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000b00010ca8000000000000000000000000000000000000801100000000000000000000000000000000000000000000000000000000000000075c1cd5bd0fd333ce9d7c8edfc79f43b8f345b4a394f6aba12a2cc78ce4012ed700010ca80000000000000000000000000000000000008011000000000000000000000000000000000000000000000000000000000000000845392775318aa47beaafbdc827da38c9f1e88c3bdcabba2cb493062e17cbf21e00010ca800000000000000000000000000000000000080080000000000000000000000000000000000000000000000000000000000000000c094e20e7ac9b433f44a5885e3bdc07e51b309aeb993caa24ba84a661ac010c100010ca800000000000000000000000000000000000080080000000000000000000000000000000000000000000000000000000000000001ab42db8f4ed810bdb143368a2b641edf242af6e3d0de8b1486e2b0e7880d431100010ca8000000000000000000000000000000000000800800000000000000000000000000000000000000000000000000000000000000022d94e4cc4525e4e2d81e8227b6172e97076431a2cf98792d978035edd6e6f3100000000000000000000000000000000000000000000000000000000000000000000000000000012101c74dfb80a80fccb9a4022b2406f79f56305e6a7c931d30140f5d372fe793837e93f9ec6b8d89a9d0ab222eeb27547f66b90ec40fbbdd2a4936b0b0c19ca684ff78888fbf5840d7c8dc3c493b139471750938d7d2c443e2d283e6c5ee9fde3765a756542c42f002af45c362b4b5b1687a8fc24cbf16532b903f7bb289728170dcf597f5255508c623ba247735538376f494cdcdd5bd0c4cb067526eeda0f4745a28d8baf8893ecc1b8cee80690538d66455294a028da03ff2add9d8a88e6ee03ba9ffe3ad7d91d6ac9c69a1f28c468f00fe55eba5651a2b32dc2458e0d14b4dd6d0173df255cd56aa01e8e38edec17ea8933f68543cbdc713279d195551d4211bed5c91f77259a695e6768f6c4b110b2158fcc42423a96dcc4e7f6fddb3e2369d00000000000000000000000000000000000000000000000000000000000000") };
         let variant = TxEip4844Variant::TxEip4844(tx);
 
-        let signature = Signature::from_rs_and_parity(
+        let signature = RawSignature::from_rs_and_parity(
             b256!("6c173c3c8db3e3299f2f728d293b912c12e75243e3aa66911c2329b58434e2a4").into(),
             b256!("7dd4d1c228cedc5a414a668ab165d9e888e61e4c3b44cd7daf9cdcc4cec5d6b2").into(),
             false,

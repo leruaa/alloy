@@ -2,7 +2,7 @@ use core::ops::Deref;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use alloy_primitives::{keccak256, Address, ChainId, Signature, B256};
+use alloy_primitives::{keccak256, Address, ChainId, MemoizedSignature, Signature, B256};
 use alloy_rlp::{
     length_of_length, BufMut, Decodable, Encodable, Header, Result as RlpResult, RlpDecodable,
     RlpEncodable,
@@ -64,7 +64,7 @@ impl Authorization {
     }
 
     /// Convert to a signed authorization by adding a signature.
-    pub const fn into_signed(self, signature: Signature) -> SignedAuthorization {
+    pub const fn into_signed(self, signature: MemoizedSignature) -> SignedAuthorization {
         SignedAuthorization { inner: self, signature }
     }
 }
@@ -76,17 +76,17 @@ pub struct SignedAuthorization {
     #[cfg_attr(feature = "serde", serde(flatten))]
     inner: Authorization,
     #[cfg_attr(feature = "serde", serde(flatten))]
-    signature: Signature,
+    signature: MemoizedSignature,
 }
 
 impl SignedAuthorization {
     /// Get the `signature` for the authorization.
-    pub const fn signature(&self) -> &Signature {
+    pub const fn signature(&self) -> &MemoizedSignature {
         &self.signature
     }
 
     /// Splits the authorization into parts.
-    pub const fn into_parts(self) -> (Authorization, Signature) {
+    pub const fn into_parts(self) -> (Authorization, MemoizedSignature) {
         (self.inner, self.signature)
     }
 

@@ -8,8 +8,8 @@
 
 use alloy_consensus::SignableTransaction;
 use alloy_network::{TxSigner, TxSignerSync};
-use alloy_primitives::{Address, ChainId, Signature, B256};
-use alloy_signer::{sign_transaction_with_chain_id, Result, Signer, SignerSync};
+use alloy_primitives::{Address, ChainId, B256};
+use alloy_signer::{sign_transaction_with_chain_id, Result, Signature, Signer, SignerSync};
 use async_trait::async_trait;
 use k256::ecdsa::{self, signature::hazmat::PrehashSigner, RecoveryId};
 use std::fmt;

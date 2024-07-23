@@ -1,5 +1,5 @@
 //! Signature related RPC values
-use alloy_primitives::U256;
+use alloy_primitives::{BuildableSignature, U256};
 use serde::{Deserialize, Serialize};
 
 /// Container type for all signature fields in RPC
@@ -62,7 +62,10 @@ where
     }
 }
 
-impl TryFrom<Signature> for alloy_primitives::Signature {
+impl<S> TryFrom<Signature> for alloy_primitives::Signature<S>
+where
+    Self: BuildableSignature,
+{
     type Error = alloy_primitives::SignatureError;
 
     fn try_from(value: Signature) -> Result<Self, Self::Error> {

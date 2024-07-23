@@ -1,5 +1,5 @@
 use crate::Result;
-use alloy_primitives::{eip191_hash_message, Address, ChainId, Signature, B256};
+use alloy_primitives::{eip191_hash_message, Address, ChainId, MemoizedSignature, B256};
 use async_trait::async_trait;
 use auto_impl::auto_impl;
 
@@ -21,7 +21,7 @@ use alloy_sol_types::{Eip712Domain, SolStruct};
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[auto_impl(&mut, Box)]
-pub trait Signer<Sig = Signature> {
+pub trait Signer<Sig = MemoizedSignature> {
     /// Signs the given hash.
     async fn sign_hash(&self, hash: &B256) -> Result<Sig>;
 
@@ -92,7 +92,7 @@ pub trait Signer<Sig = Signature> {
 ///
 /// [EIP-155]: https://eips.ethereum.org/EIPS/eip-155
 #[auto_impl(&, &mut, Box, Rc, Arc)]
-pub trait SignerSync<Sig = Signature> {
+pub trait SignerSync<Sig = MemoizedSignature> {
     /// Signs the given hash.
     fn sign_hash_sync(&self, hash: &B256) -> Result<Sig>;
 
@@ -215,7 +215,7 @@ mod tests {
         #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
         #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
         impl Signer for UnimplementedSigner {
-            async fn sign_hash(&self, _hash: &B256) -> Result<Signature> {
+            async fn sign_hash(&self, _hash: &B256) -> Result<MemoizedSignature> {
                 Err(Error::UnsupportedOperation(UnsupportedSignerOperation::SignHash))
             }
 
@@ -231,7 +231,7 @@ mod tests {
         }
 
         impl SignerSync for UnimplementedSigner {
-            fn sign_hash_sync(&self, _hash: &B256) -> Result<Signature> {
+            fn sign_hash_sync(&self, _hash: &B256) -> Result<MemoizedSignature> {
                 Err(Error::UnsupportedOperation(UnsupportedSignerOperation::SignHash))
             }
 
