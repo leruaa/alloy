@@ -279,7 +279,7 @@ impl TryFrom<Transaction> for TxEnvelope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::Signature as AlloySignature;
+    use alloy_primitives::MemoizedSignature as AlloySignature;
     use arbitrary::Arbitrary;
     use rand::Rng;
     use std::str::FromStr;

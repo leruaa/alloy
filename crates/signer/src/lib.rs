@@ -14,7 +14,7 @@ pub use signer::{Signer, SignerSync};
 
 pub mod utils;
 
-pub use alloy_primitives::Signature;
+pub use alloy_primitives::MemoizedSignature as Signature;
 pub use k256;
 
 /// Utility to get and set the chain ID on a transaction and the resulting signature within a
@@ -27,6 +27,8 @@ macro_rules! sign_transaction_with_chain_id {
     //    sign: lazy Signature,
     // )
     ($signer:expr, $tx:expr, $sign:expr) => {{
+        use alloy_primitives::EncodableSignature;
+
         if let Some(chain_id) = $signer.chain_id() {
             if !$tx.set_chain_id_checked(chain_id) {
                 return Err(alloy_signer::Error::TransactionChainIdMismatch {

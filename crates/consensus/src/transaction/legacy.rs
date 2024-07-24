@@ -1,5 +1,5 @@
 use crate::{SignableTransaction, Signed, Transaction};
-use alloy_primitives::{keccak256, Bytes, ChainId, Signature, TxKind, U256};
+use alloy_primitives::{keccak256, Bytes, ChainId, EncodableSignature, TxKind, U256};
 use alloy_rlp::{length_of_length, BufMut, Decodable, Encodable, Header, Result};
 use core::mem;
 
@@ -104,11 +104,10 @@ impl TxLegacy {
     /// tx type byte or string header.
     ///
     /// This __does__ encode a list header and include a signature.
-    pub fn encode_with_signature_fields(
-        &self,
-        signature: &Signature,
-        out: &mut dyn alloy_rlp::BufMut,
-    ) {
+    pub fn encode_with_signature_fields<S>(&self, signature: &S, out: &mut dyn alloy_rlp::BufMut)
+    where
+        S: EncodableSignature,
+    {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         let header = Header { list: true, payload_length };
         header.encode(out);
@@ -118,7 +117,10 @@ impl TxLegacy {
 
     /// Returns what the encoded length should be, if the transaction were RLP encoded with the
     /// given signature.
-    pub fn encoded_len_with_signature(&self, signature: &Signature) -> usize {
+    pub fn encoded_len_with_signature<S>(&self, signature: &S) -> usize
+    where
+        S: EncodableSignature,
+    {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         Header { list: true, payload_length }.length() + payload_length
     }
@@ -156,7 +158,10 @@ impl TxLegacy {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, S>>
+    where
+        S: EncodableSignature + Copy,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -166,7 +171,7 @@ impl TxLegacy {
         let original_len = buf.len();
 
         let mut tx = Self::decode_fields(buf)?;
-        let signature = Signature::decode_rlp_vrs(buf)?;
+        let signature = S::decode_rlp_vrs(buf)?;
 
         // extract chain id from signature
         let v = signature.v();
@@ -228,7 +233,7 @@ impl Transaction for TxLegacy {
     }
 }
 
-impl SignableTransaction<Signature> for TxLegacy {
+impl SignableTransaction for TxLegacy {
     fn use_eip155(&self) -> bool {
         self.chain_id.is_some()
     }
@@ -250,7 +255,10 @@ impl SignableTransaction<Signature> for TxLegacy {
         Header { list: true, payload_length }.length() + payload_length
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed<S>(self, signature: S) -> Signed<Self, S>
+    where
+        S: EncodableSignature,
+    {
         let mut buf = Vec::with_capacity(self.encoded_len_with_signature(&signature));
         self.encode_with_signature_fields(&signature, &mut buf);
         let hash = keccak256(&buf);
@@ -302,7 +310,7 @@ impl Decodable for TxLegacy {
 #[cfg(all(test, feature = "k256"))]
 mod tests {
     use crate::{SignableTransaction, TxLegacy};
-    use alloy_primitives::{address, b256, hex, Address, Signature, TxKind, B256, U256};
+    use alloy_primitives::{address, b256, hex, Address, MemoizedSignature, TxKind, B256, U256};
 
     #[test]
     fn recover_signer_legacy() {
@@ -320,7 +328,7 @@ mod tests {
             input:  hex!("f7d8c88300000000000000000000000000000000000000000000000000000000000cee6100000000000000000000000000000000000000000000000000000000000ac3e1").into(),
         };
 
-        let sig = Signature::from_scalars_and_parity(
+        let sig = MemoizedSignature::from_scalars_and_parity(
             b256!("2a378831cf81d99a3f06a18ae1b6ca366817ab4d88a70053c41d7a8f0368e031"),
             b256!("450d831a05b6e418724436c05c155e0a1b7b921015d0fbc2f667aed709ac4fb5"),
             37,

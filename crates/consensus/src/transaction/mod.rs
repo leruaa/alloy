@@ -1,7 +1,7 @@
 //! Transaction types.
 
 use crate::Signed;
-use alloy_primitives::{keccak256, ChainId, TxKind, B256, U256};
+use alloy_primitives::{keccak256, ChainId, EncodableSignature, TxKind, B256, U256};
 use core::any;
 
 #[cfg(not(feature = "std"))]
@@ -68,7 +68,7 @@ pub trait Transaction: any::Any + Send + Sync + 'static {
 /// types, or in other networks. For example, in Optimism, the deposit transaction signature is the
 /// unit type `()`.
 #[doc(alias = "SignableTx", alias = "TxSignable")]
-pub trait SignableTransaction<Signature>: Transaction {
+pub trait SignableTransaction: Transaction {
     /// True if the transaction uses EIP-155 signatures.
     fn use_eip155(&self) -> bool {
         false
@@ -118,14 +118,15 @@ pub trait SignableTransaction<Signature>: Transaction {
 
     /// Convert to a signed transaction by adding a signature and computing the
     /// hash.
-    fn into_signed(self, signature: Signature) -> Signed<Self, Signature>
+    fn into_signed<S>(self, signature: S) -> Signed<Self, S>
     where
-        Self: Sized;
+        Self: Sized,
+        S: EncodableSignature + Copy;
 }
 
 // TODO: Remove in favor of dyn trait upcasting (TBD, see https://github.com/rust-lang/rust/issues/65991#issuecomment-1903120162)
 #[doc(hidden)]
-impl<S: 'static> dyn SignableTransaction<S> {
+impl dyn SignableTransaction {
     pub fn __downcast_ref<T: any::Any>(&self) -> Option<&T> {
         if any::Any::type_id(self) == any::TypeId::of::<T>() {
             unsafe { Some(&*(self as *const _ as *const T)) }

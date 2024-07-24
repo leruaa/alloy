@@ -86,7 +86,7 @@ pub trait TxSigner<Signature> {
     #[doc(alias = "sign_tx")]
     async fn sign_transaction(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature>;
 }
 
@@ -115,6 +115,6 @@ pub trait TxSignerSync<Signature> {
     #[doc(alias = "sign_tx_sync")]
     fn sign_transaction_sync(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature>;
 }

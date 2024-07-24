@@ -1,10 +1,13 @@
 use crate::transaction::SignableTransaction;
-use alloy_primitives::{Signature, B256};
+use alloy_primitives::{EncodableSignature, Signature, B256};
 
 /// A transaction with a signature and hash seal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Signed<T, Sig = Signature> {
+pub struct Signed<T, Sig = Signature>
+where
+    Sig: EncodableSignature,
+{
     #[cfg_attr(feature = "serde", serde(flatten))]
     #[doc(alias = "transaction")]
     tx: T,
@@ -14,7 +17,10 @@ pub struct Signed<T, Sig = Signature> {
     hash: B256,
 }
 
-impl<T, Sig> Signed<T, Sig> {
+impl<T, Sig> Signed<T, Sig>
+where
+    Sig: EncodableSignature,
+{
     /// Returns a reference to the transaction.
     #[doc(alias = "transaction")]
     pub const fn tx(&self) -> &T {
@@ -41,9 +47,17 @@ impl<T, Sig> Signed<T, Sig> {
     pub fn strip_signature(self) -> T {
         self.tx
     }
+    /// Converts the inner signature to a [`Signature`].
+    pub fn into_raw(self) -> Signed<T, Signature> {
+        Signed { tx: self.tx, signature: self.signature.as_raw(), hash: self.hash }
+    }
 }
 
-impl<T: SignableTransaction<Sig>, Sig> Signed<T, Sig> {
+impl<T, Sig> Signed<T, Sig>
+where
+    T: SignableTransaction,
+    Sig: EncodableSignature,
+{
     /// Instantiate from a transaction and signature. Does not verify the signature.
     pub const fn new_unchecked(tx: T, signature: Sig, hash: B256) -> Self {
         Self { tx, signature, hash }
@@ -56,7 +70,7 @@ impl<T: SignableTransaction<Sig>, Sig> Signed<T, Sig> {
 }
 
 #[cfg(feature = "k256")]
-impl<T: SignableTransaction<Signature>> Signed<T, Signature> {
+impl<T: SignableTransaction> Signed<T, alloy_primitives::MemoizedSignature> {
     /// Recover the signer of the transaction
     pub fn recover_signer(
         &self,

@@ -696,77 +696,58 @@ impl From<TypedTransaction> for TransactionRequest {
     }
 }
 
-impl From<TxEnvelope> for TransactionRequest {
-    fn from(envelope: TxEnvelope) -> Self {
+#[cfg(feature = "k256")]
+impl From<TxEnvelope<alloy_primitives::MemoizedSignature>> for TransactionRequest {
+    fn from(envelope: TxEnvelope<alloy_primitives::MemoizedSignature>) -> Self {
         match envelope {
             TxEnvelope::Legacy(tx) => {
-                #[cfg(feature = "k256")]
-                {
-                    let from = tx.recover_signer().ok();
-                    let tx: Self = tx.strip_signature().into();
-                    if let Some(from) = from {
-                        tx.from(from)
-                    } else {
-                        tx
-                    }
-                }
-
-                #[cfg(not(feature = "k256"))]
-                {
-                    tx.strip_signature().into()
+                let from = tx.recover_signer().ok();
+                let tx: Self = tx.strip_signature().into();
+                if let Some(from) = from {
+                    tx.from(from)
+                } else {
+                    tx
                 }
             }
             TxEnvelope::Eip2930(tx) => {
-                #[cfg(feature = "k256")]
-                {
-                    let from = tx.recover_signer().ok();
-                    let tx: Self = tx.strip_signature().into();
-                    if let Some(from) = from {
-                        tx.from(from)
-                    } else {
-                        tx
-                    }
-                }
-
-                #[cfg(not(feature = "k256"))]
-                {
-                    tx.strip_signature().into()
+                let from = tx.recover_signer().ok();
+                let tx: Self = tx.strip_signature().into();
+                if let Some(from) = from {
+                    tx.from(from)
+                } else {
+                    tx
                 }
             }
             TxEnvelope::Eip1559(tx) => {
-                #[cfg(feature = "k256")]
-                {
-                    let from = tx.recover_signer().ok();
-                    let tx: Self = tx.strip_signature().into();
-                    if let Some(from) = from {
-                        tx.from(from)
-                    } else {
-                        tx
-                    }
-                }
-
-                #[cfg(not(feature = "k256"))]
-                {
-                    tx.strip_signature().into()
+                let from = tx.recover_signer().ok();
+                let tx: Self = tx.strip_signature().into();
+                if let Some(from) = from {
+                    tx.from(from)
+                } else {
+                    tx
                 }
             }
             TxEnvelope::Eip4844(tx) => {
-                #[cfg(feature = "k256")]
-                {
-                    let from = tx.recover_signer().ok();
-                    let tx: Self = tx.strip_signature().into();
-                    if let Some(from) = from {
-                        tx.from(from)
-                    } else {
-                        tx
-                    }
-                }
-
-                #[cfg(not(feature = "k256"))]
-                {
-                    tx.strip_signature().into()
+                let from = tx.recover_signer().ok();
+                let tx: Self = tx.strip_signature().into();
+                if let Some(from) = from {
+                    tx.from(from)
+                } else {
+                    tx
                 }
             }
+            _ => Default::default(),
+        }
+    }
+}
+
+impl From<TxEnvelope> for TransactionRequest {
+    fn from(envelope: TxEnvelope) -> Self {
+        match envelope {
+            TxEnvelope::Legacy(tx) => tx.strip_signature().into(),
+            TxEnvelope::Eip2930(tx) => tx.strip_signature().into(),
+            TxEnvelope::Eip1559(tx) => tx.strip_signature().into(),
+            TxEnvelope::Eip4844(tx) => tx.strip_signature().into(),
             _ => Default::default(),
         }
     }

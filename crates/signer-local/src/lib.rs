@@ -8,8 +8,8 @@
 
 use alloy_consensus::SignableTransaction;
 use alloy_network::{TxSigner, TxSignerSync};
-use alloy_primitives::{Address, ChainId, Signature, B256};
-use alloy_signer::{sign_transaction_with_chain_id, Result, Signer, SignerSync};
+use alloy_primitives::{Address, ChainId, B256};
+use alloy_signer::{sign_transaction_with_chain_id, Result, Signature, Signer, SignerSync};
 use async_trait::async_trait;
 use k256::ecdsa::{self, signature::hazmat::PrehashSigner, RecoveryId};
 use std::fmt;
@@ -187,7 +187,7 @@ where
     #[doc(alias = "sign_tx")]
     async fn sign_transaction(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_hash_sync(&tx.signature_hash()))
     }
@@ -204,7 +204,7 @@ where
     #[doc(alias = "sign_tx_sync")]
     fn sign_transaction_sync(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_hash_sync(&tx.signature_hash()))
     }
@@ -230,7 +230,7 @@ mod test {
         }
 
         async fn sign_dyn_tx_test(
-            tx: &mut dyn SignableTransaction<Signature>,
+            tx: &mut dyn SignableTransaction,
             chain_id: Option<ChainId>,
         ) -> Result<Signature> {
             let mut signer: PrivateKeySigner =

@@ -84,7 +84,7 @@ impl EthereumWallet {
     async fn sign_transaction_inner(
         &self,
         sender: Address,
-        tx: &mut dyn SignableTransaction<Signature>,
+        tx: &mut dyn SignableTransaction,
     ) -> alloy_signer::Result<Signature> {
         self.signer_by_address(sender)
             .ok_or_else(|| {
@@ -122,19 +122,19 @@ where
         match tx {
             TypedTransaction::Legacy(mut t) => {
                 let sig = self.sign_transaction_inner(sender, &mut t).await?;
-                Ok(t.into_signed(sig).into())
+                Ok(t.into_signed(sig).into_raw().into())
             }
             TypedTransaction::Eip2930(mut t) => {
                 let sig = self.sign_transaction_inner(sender, &mut t).await?;
-                Ok(t.into_signed(sig).into())
+                Ok(t.into_signed(sig).into_raw().into())
             }
             TypedTransaction::Eip1559(mut t) => {
                 let sig = self.sign_transaction_inner(sender, &mut t).await?;
-                Ok(t.into_signed(sig).into())
+                Ok(t.into_signed(sig).into_raw().into())
             }
             TypedTransaction::Eip4844(mut t) => {
                 let sig = self.sign_transaction_inner(sender, &mut t).await?;
-                Ok(t.into_signed(sig).into())
+                Ok(t.into_signed(sig).into_raw().into())
             }
         }
     }

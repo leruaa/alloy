@@ -39,10 +39,7 @@ impl alloy_network::TxSigner<Signature> for LedgerSigner {
 
     #[inline]
     #[doc(alias = "sign_tx")]
-    async fn sign_transaction(
-        &self,
-        tx: &mut dyn SignableTransaction<Signature>,
-    ) -> Result<Signature> {
+    async fn sign_transaction(&self, tx: &mut dyn SignableTransaction) -> Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_tx_rlp(&tx.encoded_for_signing()).await)
     }
 }
@@ -394,7 +391,7 @@ mod tests {
         test_sign_tx_generic(&mut tx).await;
     }
 
-    async fn test_sign_tx_generic(tx: &mut dyn SignableTransaction<Signature>) {
+    async fn test_sign_tx_generic(tx: &mut dyn SignableTransaction) {
         let sighash = tx.signature_hash();
         let ledger = init_ledger().await;
         let sig = match ledger.sign_transaction(tx).await {

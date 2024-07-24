@@ -2,7 +2,7 @@ use core::ops::Deref;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use alloy_primitives::{keccak256, Address, ChainId, Signature, B256};
+use alloy_primitives::{keccak256, Address, ChainId, EncodableSignature, MemoizedSignature, B256};
 use alloy_rlp::{
     length_of_length, BufMut, Decodable, Encodable, Header, Result as RlpResult, RlpDecodable,
     RlpEncodable,
@@ -95,7 +95,7 @@ impl Authorization {
     }
 
     /// Convert to a signed authorization by adding a signature.
-    pub const fn into_signed(self, signature: Signature) -> SignedAuthorization {
+    pub const fn into_signed(self, signature: MemoizedSignature) -> SignedAuthorization {
         SignedAuthorization { inner: self, signature }
     }
 }
@@ -107,17 +107,17 @@ pub struct SignedAuthorization {
     #[cfg_attr(feature = "serde", serde(flatten))]
     inner: Authorization,
     #[cfg_attr(feature = "serde", serde(flatten))]
-    signature: Signature,
+    signature: MemoizedSignature,
 }
 
 impl SignedAuthorization {
     /// Get the `signature` for the authorization.
-    pub const fn signature(&self) -> &Signature {
+    pub const fn signature(&self) -> &MemoizedSignature {
         &self.signature
     }
 
     /// Splits the authorization into parts.
-    pub const fn into_parts(self) -> (Authorization, Signature) {
+    pub const fn into_parts(self) -> (Authorization, MemoizedSignature) {
         (self.inner, self.signature)
     }
 
@@ -129,7 +129,7 @@ impl SignedAuthorization {
                 address: Decodable::decode(buf)?,
                 nonce: Decodable::decode(buf)?,
             },
-            signature: Signature::decode_rlp_vrs(buf)?,
+            signature: MemoizedSignature::decode_rlp_vrs(buf)?,
         })
     }
 
@@ -224,7 +224,7 @@ impl<'a> arbitrary::Arbitrary<'a> for SignedAuthorization {
 
         let (recoverable_sig, recovery_id) =
             signing_key.sign_prehash(signature_hash.as_ref()).unwrap();
-        let signature = Signature::from_signature_and_parity(recoverable_sig, recovery_id)
+        let signature = MemoizedSignature::from_signature_and_parity(recoverable_sig, recovery_id)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         Ok(Self { inner, signature })
@@ -349,7 +349,7 @@ impl Deref for OptionalNonce {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{hex, Signature};
+    use alloy_primitives::hex;
     use core::str::FromStr;
 
     fn test_encode_decode_roundtrip(auth: Authorization) {
@@ -396,7 +396,7 @@ mod tests {
                 address: Address::left_padding_from(&[6]),
                 nonce: Some(1u64).into(),
             },
-            signature: Signature::from_str("48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c8041b").unwrap(),
+            signature: MemoizedSignature::from_str("48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c8041b").unwrap(),
         };
         let mut buf = Vec::new();
         auth.encode(&mut buf);

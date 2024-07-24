@@ -1,5 +1,5 @@
 use alloy_consensus::SignableTransaction;
-use alloy_primitives::{hex, Address, ChainId, B256};
+use alloy_primitives::{hex, Address, ChainId, EncodableSignature, B256};
 use alloy_signer::{sign_transaction_with_chain_id, Result, Signature, Signer};
 use async_trait::async_trait;
 use gcloud_sdk::{
@@ -154,10 +154,7 @@ impl alloy_network::TxSigner<Signature> for GcpSigner {
 
     #[inline]
     #[doc(alias = "sign_tx")]
-    async fn sign_transaction(
-        &self,
-        tx: &mut dyn SignableTransaction<Signature>,
-    ) -> Result<Signature> {
+    async fn sign_transaction(&self, tx: &mut dyn SignableTransaction) -> Result<Signature> {
         sign_transaction_with_chain_id!(self, tx, self.sign_hash(&tx.signature_hash()).await)
     }
 }

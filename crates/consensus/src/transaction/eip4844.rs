@@ -1,7 +1,9 @@
 use crate::{SignableTransaction, Signed, Transaction, TxType};
 
 use alloy_eips::{eip2930::AccessList, eip4844::DATA_GAS_PER_BLOB};
-use alloy_primitives::{keccak256, Address, Bytes, ChainId, Signature, TxKind, B256, U256};
+use alloy_primitives::{
+    keccak256, Address, Bytes, ChainId, EncodableSignature, TxKind, B256, U256,
+};
 use alloy_rlp::{length_of_length, BufMut, Decodable, Encodable, Header};
 use core::mem;
 
@@ -122,12 +124,10 @@ impl TxEip4844Variant {
     /// If `with_header` is `true`, the following will be encoded:
     /// `rlp(tx_type (0x03) || rlp([transaction_payload_body, blobs, commitments, proofs]))`
     #[doc(hidden)]
-    pub fn encode_with_signature(
-        &self,
-        signature: &Signature,
-        out: &mut dyn BufMut,
-        with_header: bool,
-    ) {
+    pub fn encode_with_signature<S>(&self, signature: &S, out: &mut dyn BufMut, with_header: bool)
+    where
+        S: EncodableSignature,
+    {
         let payload_length = match self {
             Self::TxEip4844(tx) => tx.fields_len() + signature.rlp_vrs_len(),
             Self::TxEip4844WithSidecar(tx) => {
@@ -165,7 +165,10 @@ impl TxEip4844Variant {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, S>>
+    where
+        S: EncodableSignature + Copy,
+    {
         let mut current_buf = *buf;
         let _header = Header::decode(&mut current_buf)?;
 
@@ -241,7 +244,7 @@ impl Transaction for TxEip4844Variant {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip4844Variant {
+impl SignableTransaction for TxEip4844Variant {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         match self {
             Self::TxEip4844(ref mut inner) => {
@@ -268,7 +271,11 @@ impl SignableTransaction<Signature> for TxEip4844Variant {
         1 + length_of_length(payload_length) + payload_length
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed<S>(self, signature: S) -> Signed<Self, S>
+    where
+        Self: Sized,
+        S: EncodableSignature + Copy,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -493,7 +500,10 @@ impl TxEip4844 {
     ///
     /// If `with_header` is `true`, the payload length will include the RLP header length.
     /// If `with_header` is `false`, the payload length will not include the RLP header length.
-    pub fn encoded_len_with_signature(&self, signature: &Signature, with_header: bool) -> usize {
+    pub fn encoded_len_with_signature<S>(&self, signature: &S, with_header: bool) -> usize
+    where
+        S: EncodableSignature,
+    {
         // this counts the tx fields and signature fields
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
 
@@ -516,12 +526,10 @@ impl TxEip4844 {
     /// Inner encoding function that is used for both rlp [`Encodable`] trait and for calculating
     /// hash that for eip2718 does not require a rlp header
     #[doc(hidden)]
-    pub fn encode_with_signature(
-        &self,
-        signature: &Signature,
-        out: &mut dyn BufMut,
-        with_header: bool,
-    ) {
+    pub fn encode_with_signature<S>(&self, signature: &S, out: &mut dyn BufMut, with_header: bool)
+    where
+        S: EncodableSignature,
+    {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         if with_header {
             Header {
@@ -538,7 +546,10 @@ impl TxEip4844 {
     /// tx type byte or string header.
     ///
     /// This __does__ encode a list header and include a signature.
-    pub(crate) fn encode_with_signature_fields(&self, signature: &Signature, out: &mut dyn BufMut) {
+    pub(crate) fn encode_with_signature_fields<S>(&self, signature: &S, out: &mut dyn BufMut)
+    where
+        S: EncodableSignature,
+    {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         let header = Header { list: true, payload_length };
         header.encode(out);
@@ -553,7 +564,10 @@ impl TxEip4844 {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, S>>
+    where
+        S: EncodableSignature + Copy,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -563,7 +577,7 @@ impl TxEip4844 {
         let original_len = buf.len();
 
         let tx = Self::decode_fields(buf)?;
-        let signature = Signature::decode_rlp_vrs(buf)?;
+        let signature = S::decode_rlp_vrs(buf)?;
 
         let signed = tx.into_signed(signature);
         if buf.len() + header.payload_length != original_len {
@@ -603,7 +617,7 @@ impl TxEip4844 {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip4844 {
+impl SignableTransaction for TxEip4844 {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.chain_id = chain_id;
     }
@@ -616,7 +630,11 @@ impl SignableTransaction<Signature> for TxEip4844 {
         self.payload_len_for_signature()
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed<S>(self, signature: S) -> Signed<Self, S>
+    where
+        Self: Sized,
+        S: EncodableSignature + Copy,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -772,7 +790,10 @@ impl TxEip4844WithSidecar {
     ///
     /// where `tx_payload` is the RLP encoding of the [TxEip4844] transaction fields:
     /// `rlp([chain_id, nonce, max_priority_fee_per_gas, ..., v, r, s])`
-    pub fn encode_with_signature_fields(&self, signature: &Signature, out: &mut dyn BufMut) {
+    pub fn encode_with_signature_fields<S>(&self, signature: &S, out: &mut dyn BufMut)
+    where
+        S: EncodableSignature,
+    {
         let inner_payload_length = self.tx.fields_len() + signature.rlp_vrs_len();
         let inner_header = Header { list: true, payload_length: inner_payload_length };
 
@@ -799,7 +820,10 @@ impl TxEip4844WithSidecar {
     ///
     /// This is the inverse of [TxEip4844WithSidecar::encode_with_signature_fields].
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, S>>
+    where
+        S: EncodableSignature + Copy,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -829,7 +853,7 @@ impl TxEip4844WithSidecar {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip4844WithSidecar {
+impl SignableTransaction for TxEip4844WithSidecar {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.tx.chain_id = chain_id;
     }
@@ -849,7 +873,11 @@ impl SignableTransaction<Signature> for TxEip4844WithSidecar {
         self.tx.payload_len_for_signature()
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self, Signature> {
+    fn into_signed<S>(self, signature: S) -> Signed<Self, S>
+    where
+        Self: Sized,
+        S: EncodableSignature + Copy,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-4844 transaction. V should indicate the y-parity of the
         // signature.
@@ -903,7 +931,7 @@ mod tests {
     use super::{BlobTransactionSidecar, TxEip4844, TxEip4844WithSidecar};
     use crate::{transaction::eip4844::TxEip4844Variant, SignableTransaction, TxEnvelope};
     use alloy_eips::eip2930::AccessList;
-    use alloy_primitives::{address, b256, bytes, Signature, U256};
+    use alloy_primitives::{address, b256, bytes, EncodableSignature, Signature, U256};
     use alloy_rlp::{Decodable, Encodable};
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::{SignableTransaction, Signed, Transaction, TxType};
 use alloy_eips::eip2930::AccessList;
-use alloy_primitives::{keccak256, Bytes, ChainId, Signature, TxKind, U256};
+use alloy_primitives::{keccak256, Bytes, ChainId, EncodableSignature, TxKind, U256};
 use alloy_rlp::{BufMut, Decodable, Encodable, Header};
 use core::mem;
 
@@ -153,7 +153,10 @@ impl TxEip1559 {
     ///
     /// If `with_header` is `true`, the payload length will include the RLP header length.
     /// If `with_header` is `false`, the payload length will not include the RLP header length.
-    pub fn encoded_len_with_signature(&self, signature: &Signature, with_header: bool) -> usize {
+    pub fn encoded_len_with_signature<S>(&self, signature: &S, with_header: bool) -> usize
+    where
+        S: EncodableSignature,
+    {
         // this counts the tx fields and signature fields
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
 
@@ -176,12 +179,10 @@ impl TxEip1559 {
     /// Inner encoding function that is used for both rlp [`Encodable`] trait and for calculating
     /// hash that for eip2718 does not require a rlp header.
     #[doc(hidden)]
-    pub fn encode_with_signature(
-        &self,
-        signature: &Signature,
-        out: &mut dyn BufMut,
-        with_header: bool,
-    ) {
+    pub fn encode_with_signature<S>(&self, signature: &S, out: &mut dyn BufMut, with_header: bool)
+    where
+        S: EncodableSignature,
+    {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         if with_header {
             Header {
@@ -201,7 +202,10 @@ impl TxEip1559 {
     ///
     /// This __does__ expect the bytes to start with a list header and include a signature.
     #[doc(hidden)]
-    pub fn decode_signed_fields(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self>> {
+    pub fn decode_signed_fields<S>(buf: &mut &[u8]) -> alloy_rlp::Result<Signed<Self, S>>
+    where
+        S: EncodableSignature + Copy,
+    {
         let header = Header::decode(buf)?;
         if !header.list {
             return Err(alloy_rlp::Error::UnexpectedString);
@@ -211,7 +215,7 @@ impl TxEip1559 {
         let original_len = buf.len();
 
         let tx = Self::decode_fields(buf)?;
-        let signature = Signature::decode_rlp_vrs(buf)?;
+        let signature = S::decode_rlp_vrs(buf)?;
 
         let signed = tx.into_signed(signature);
         if buf.len() + header.payload_length != original_len {
@@ -228,7 +232,10 @@ impl TxEip1559 {
     /// tx type byte or string header.
     ///
     /// This __does__ encode a list header and include a signature.
-    pub(crate) fn encode_with_signature_fields(&self, signature: &Signature, out: &mut dyn BufMut) {
+    pub(crate) fn encode_with_signature_fields<S>(&self, signature: &S, out: &mut dyn BufMut)
+    where
+        S: EncodableSignature,
+    {
         let payload_length = self.fields_len() + signature.rlp_vrs_len();
         let header = Header { list: true, payload_length };
         header.encode(out);
@@ -287,7 +294,7 @@ impl Transaction for TxEip1559 {
     }
 }
 
-impl SignableTransaction<Signature> for TxEip1559 {
+impl SignableTransaction for TxEip1559 {
     fn set_chain_id(&mut self, chain_id: ChainId) {
         self.chain_id = chain_id;
     }
@@ -301,7 +308,11 @@ impl SignableTransaction<Signature> for TxEip1559 {
         self.length() + 1
     }
 
-    fn into_signed(self, signature: Signature) -> Signed<Self> {
+    fn into_signed<S>(self, signature: S) -> Signed<Self, S>
+    where
+        Self: Sized,
+        S: EncodableSignature + Copy,
+    {
         // Drop any v chain id value to ensure the signature format is correct at the time of
         // combination for an EIP-1559 transaction. V should indicate the y-parity of the
         // signature.
@@ -345,7 +356,7 @@ mod tests {
     use super::TxEip1559;
     use crate::SignableTransaction;
     use alloy_eips::eip2930::AccessList;
-    use alloy_primitives::{address, b256, hex, Address, Signature, B256, U256};
+    use alloy_primitives::{address, b256, hex, Address, MemoizedSignature, B256, U256};
 
     #[test]
     fn recover_signer_eip1559() {
@@ -364,7 +375,7 @@ mod tests {
             access_list: AccessList::default(),
         };
 
-        let sig = Signature::from_scalars_and_parity(
+        let sig = MemoizedSignature::from_scalars_and_parity(
             b256!("840cfc572845f5786e702984c2a582528cad4b49b2a10b9db1be7fca90058565"),
             b256!("25e7109ceb98168d95b09b18bbf6b685130e0562f233877d492b94eee0c5b6d1"),
             false,
@@ -397,7 +408,7 @@ mod tests {
             access_list: AccessList::default(),
         };
 
-        let sig = Signature::from_scalars_and_parity(
+        let sig = MemoizedSignature::from_scalars_and_parity(
             b256!("840cfc572845f5786e702984c2a582528cad4b49b2a10b9db1be7fca90058565"),
             b256!("25e7109ceb98168d95b09b18bbf6b685130e0562f233877d492b94eee0c5b6d1"),
             false,
